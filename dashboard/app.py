@@ -6,7 +6,7 @@ This Streamlit app visualizes the execution of our
 custom five-node agent workflow and displays validation
 metrics after each completed experiment.
 """
-
+import json
 import sys
 from pathlib import Path
 
