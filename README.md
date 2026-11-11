@@ -152,8 +152,8 @@ The project uses the following containers:
 Clone the repository and create a local `.env` file:
 
 ```bash
-git clone https://github.com/ThomasXu2026/IDS706_Mini-Assignment_with_Orchestration
-cd seoul-bike-automl
+git clone https://github.com/ThomasXu2026/IDS706_Mini-Assignment_with_Orchestration.git
+cd IDS706_Mini-Assignment_with_Orchestration
 cp .env.example .env
 ```
 
