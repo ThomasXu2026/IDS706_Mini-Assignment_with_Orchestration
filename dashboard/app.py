@@ -194,6 +194,27 @@ if st.button("Run AutoML Agent", type="primary"):
         # Present the final result after all graph iterations.
         best = latest_state["best_result"]
 
+        # Save the full experiment history for reproducibility.
+        output_dir = PROJECT_ROOT / "artifacts" / "agent"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        history_df = pd.DataFrame(
+            latest_state["experiment_history"]
+        )
+
+        history_df.to_csv(
+            output_dir / "experiment_history.csv",
+            index=False,
+        )
+
+        # Save the selected experiment for final holdout evaluation.
+        with open(
+            output_dir / "best_experiment.json",
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(best, file, indent=2)
+
         st.success("AutoML workflow completed successfully!")
 
         col1, col2, col3 = st.columns(3)
