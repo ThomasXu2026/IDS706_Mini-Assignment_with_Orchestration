@@ -1,0 +1,21 @@
+
+# Data processing
+pandas==2.2.3
+numpy==1.26.4
+# Keep PyArrow compatible with NumPy 1.26.
+pyarrow==23.0.1
+# Database connection
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1
+
+# Machine learning
+scikit-learn==1.6.1
+joblib==1.4.2
+
+# Agent workflow
+langgraph>=0.6,<2
+
+# Interactive dashboard
+streamlit>=1.40,<2
+graphviz==0.20.3

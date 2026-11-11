@@ -1,0 +1,31 @@
+
+# Use Python 3.11 for the standalone AutoML agent.
+FROM python:3.11-slim
+
+# Install Graphviz for rendering the live LangGraph diagram.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends graphviz && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set the application working directory.
+WORKDIR /app
+
+# Install Python dependencies before copying the source code.
+COPY requirements-agent.txt .
+
+RUN pip install --no-cache-dir -r requirements-agent.txt
+
+# Copy only the application source code.
+# Datasets and model artifacts will be mounted using Docker Compose.
+COPY agent/ ./agent/
+COPY scripts/ ./scripts/
+COPY dashboard/ ./dashboard/
+
+# Expose the Streamlit web interface.
+EXPOSE 8501
+
+# Start the live AutoML dashboard.
+CMD ["streamlit", "run", "dashboard/app.py", \
+     "--server.address=0.0.0.0", \
+     "--server.port=8501", \
+     "--server.headless=true"]

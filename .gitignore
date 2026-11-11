@@ -1,0 +1,21 @@
+# Environment and credentials
+.env
+.env.*
+!.env.example
+
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Raw and processed datasets
+data/raw/
+data/processed/
+
+# Runtime outputs
+airflow/logs/
+artifacts/
+
+# Local databases
+*.db

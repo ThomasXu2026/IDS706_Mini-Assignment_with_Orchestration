@@ -1,0 +1,189 @@
+
+# Docker Compose configuration for Seoul Bike AutoML.
+#
+# Services:
+# 1. postgres: Stores cleaned bike-sharing data.
+# 2. airflow-db: Stores Airflow metadata.
+# 3. airflow-init: Initializes Airflow.
+# 4. airflow-webserver: Provides the Airflow UI.
+# 5. airflow-scheduler: Schedules and executes DAG tasks.
+
+# Share common settings across Airflow services.
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+
+  environment:
+    # LocalExecutor supports parallel task execution.
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+    # Disable built-in example DAGs.
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+
+    # Allow up to four tasks to execute concurrently.
+    AIRFLOW__CORE__PARALLELISM: "4"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "4"
+
+    # Keep Airflow metadata separate from the bike dataset.
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_user:${AIRFLOW_META_PASSWORD}@airflow-db:5432/airflow_meta
+
+    # Credentials for our bike-sharing database.
+    POSTGRES_USER: ${POSTGRES_USER}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    POSTGRES_DB: ${POSTGRES_DB}
+
+    # Docker services communicate through internal port 5432.
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+
+    # Make our project scripts importable inside Airflow.
+    PYTHONPATH: /opt/airflow/project
+
+    # Used when creating the initial admin account.
+    AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+
+  volumes:
+    # Load our own Airflow DAGs.
+    - ./airflow/dags:/opt/airflow/dags
+
+    # Preserve execution logs.
+    - ./airflow/logs:/opt/airflow/logs
+
+    # Share project scripts and datasets.
+    - ./scripts:/opt/airflow/project/scripts:ro
+    - ./data:/opt/airflow/project/data
+
+  depends_on:
+    postgres:
+      condition: service_healthy
+    airflow-db:
+      condition: service_healthy
+
+services:
+
+  # Main application database.
+  postgres:
+    image: postgres:16
+    container_name: seoul-bike-postgres
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    restart: unless-stopped
+
+  # Dedicated database for Airflow metadata.
+  airflow-db:
+    image: postgres:16
+
+    environment:
+      POSTGRES_USER: airflow_user
+      POSTGRES_PASSWORD: ${AIRFLOW_META_PASSWORD}
+      POSTGRES_DB: airflow_meta
+
+    volumes:
+      - airflow_metadata:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U airflow_user -d airflow_meta
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Run once to initialize Airflow and create an admin.
+  airflow-init:
+    <<: *airflow-common
+    profiles:
+      - setup
+
+    command:
+      - bash
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username admin \
+          --firstname Course \
+          --lastname Student \
+          --role Admin \
+          --email admin@localhost \
+          --password "$$AIRFLOW_ADMIN_PASSWORD"
+
+  # Airflow web interface.
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+
+    ports:
+      - "127.0.0.1:8090:8080"
+
+    restart: unless-stopped
+
+  # Scheduler that executes the DAG tasks.
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+
+    restart: unless-stopped
+
+  # LangGraph AutoML agent and Streamlit dashboard.
+  agent-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+
+    container_name: seoul-bike-agent
+
+    # Connect to the existing PostgreSQL service.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+      # Docker containers use internal service names and ports.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+
+      # Make project modules importable inside the container.
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
+
+    # Use 8502 on the Mac to avoid conflicts with local Streamlit.
+    ports:
+      - "127.0.0.1:8502:8501"
+
+    volumes:
+      # Read the datasets already prepared by Airflow.
+      - ./data:/app/data:ro
+
+      # Preserve trained models and evaluation results.
+      - ./artifacts:/app/artifacts
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+# Preserve both databases between restarts.
+volumes:
+  postgres_data:
+  airflow_metadata:
